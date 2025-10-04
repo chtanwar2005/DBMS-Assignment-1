@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Transaction Management Simulator</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f6fb;
+      color: #293046;
+      margin: 0; padding: 0 0 50px;
+    }
+    h1 { text-align: center; margin: 32px 0 15px; font-size: 2.2em; }
+    .container {
+      max-width: 950px;
+      background: #fff;
+      margin: 24px auto 0 auto;
+      padding: 28px 32px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgb(44 62 80 / 0.11);
+    }
+    h2 {
+      color: #2d77cb;
+      margin-top: 18px;
+    }
+    .section { margin-bottom: 38px;}
+    .state-diagram {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 52px;
+      margin: 30px 0 20px;
+    }
+    .state {
+      padding: 18px 28px;
+      border-radius: 30px;
+      background: #b2bec3;
+      color: #fff;
+      font-weight: 600;
+      position: relative;
+      transition: background .25s, box-shadow .2s;
+      box-shadow: 0 2px 8px rgba(44,62,80,0.04);
+    }
+    .state.active { background: #2ecc71;}
+    .state.partial { background: #ffe066; color: #222;}
+    .state.committed { background: #54a0ff;}
+    .state.failed { background: #e17055;}
+    .state.aborted { background: #d35400;}
+    .trans-btn {
+      padding: 8px 18px; margin: 0 7px 5px 0;
+      font-size: 16px; border-radius: 5px; border: none;
+      background: #3867d6; color: #fff; font-weight: 600;
+      cursor: pointer; transition:background .2s;}
+    .trans-btn:hover { background: #0984e3;}
+    .arrow {
+      font-size: 28px; color: #636e72;
+      margin-top: -12px;
+      font-weight: 700;
+      align-self: center;
+    }
+    .acid-cards {
+      display: flex; gap: 18px; flex-wrap: wrap; margin-top: 20px;
+    }
+    .acid-card {
+      background: #dfe6e9;
+      border-radius: 12px;
+      padding: 16px 18px;
+      flex: 1 1 220px;
+      min-width: 200px;
+      max-width: 260px;
+      box-shadow: 0 2px 10px rgb(44 62 80 / 0.07);
+      margin-bottom: 12px;
+      transition: background .3s;
+      cursor: pointer;
+    }
+    .acid-card.active { background: #81ecec; }
+    .acid-title {
+      font-size: 1.1em;
+      font-weight: bold;
+      margin-bottom: 7px;
+    }
+    .acid-demo {
+      margin-top: 11px;
+      font-size: 0.98em;
+      color: #222;
+    }
+    .dirty-table-wrapper { overflow-x: auto; }
+    .dirty-btn {
+      background: #fdcb6e;
+      color: #222;
+      font-weight: 600;
+      padding: 8px 13px;
+      border-radius: 6px;
+      border: none;
+      margin: 9px 6px 11px 0;
+      cursor:pointer;
+    }
+    .dirty-btn:hover { background:#ffeaa7;}
+    table {
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #bbb;
+      padding: 6px 12px;
+      text-align: center;
+    }
+    th { background: #0984e3; color:#fff; }
+    .grant-table { margin-top: 15px; }
+    .grant-btn, .revoke-btn {
+      margin-left: 7px;
+      padding: 6px 15px;
+      border-radius: 4px;
+      border:none;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .grant-btn { background: #00b894; color: #fff; }
+    .grant-btn:hover { background:#17dba4; }
+    .revoke-btn { background: #d63031; color: #fff; }
+    .revoke-btn:hover { background: #fd7272; }
+    @media (max-width:700px) {
+      .acid-cards {flex-direction:column;}
+      .container { padding: 8px 2vw;}
+      .state-diagram {gap:18px;}
+    }
+  </style>
+</head>
+<body>
+  <h1>Transaction Management Simulator</h1>
+  <div class="container">
+
+    <!-- Section 1: Transaction States -->
+    <div class="section">
+      <h2>1. Transaction States Visualizer</h2>
+      <div>
+        <button class="trans-btn" onclick="toState('active')">Active</button>
+        <button class="trans-btn" onclick="toState('partial')">Partial Commit</button>
+        <button class="trans-btn" onclick="toState('committed')">Commit</button>
+        <button class="trans-btn" onclick="toState('failed')">Fail</button>
+        <button class="trans-btn" onclick="toState('aborted')">Abort</button>
+      </div>
+      <div class="state-diagram">
+        <div class="state active" id="stateActive">Active</div>
+        <div class="arrow">&#8594;</div>
+        <div class="state partial" id="statePartial">Partial Commit</div>
+        <div class="arrow">&#8594;</div>
+        <div class="state committed" id="stateCommitted">Committed</div>
+        <div class="arrow">&#8594;</div>
+        <div class="state failed" id="stateFailed">Failed</div>
+        <div class="arrow">&#8594;</div>
+        <div class="state aborted" id="stateAborted">Aborted</div>
+      </div>
+      <div id="stateExplanation" style="margin-top:12px; font-size:1.04em; color:#333"></div>
+    </div>
+
+    <!-- Section 2: ACID Properties -->
+    <div class="section">
+      <h2>2. ACID Properties Demo</h2>
+      <div class="acid-cards">
+        <div class="acid-card" id="acidAtomicity" onclick="showACID('A')">
+          <div class="acid-title">Atomicity (A)</div>
+          <div class="acid-demo" id="acidDemoA"></div>
+        </div>
+        <div class="acid-card" id="acidConsistency" onclick="showACID('C')">
+          <div class="acid-title">Consistency (C)</div>
+          <div class="acid-demo" id="acidDemoC"></div>
+        </div>
+        <div class="acid-card" id="acidIsolation" onclick="showACID('I')">
+          <div class="acid-title">Isolation (I)</div>
+          <div class="acid-demo" id="acidDemoI"></div>
+        </div>
+        <div class="acid-card" id="acidDurability" onclick="showACID('D')">
+          <div class="acid-title">Durability (D)</div>
+          <div class="acid-demo" id="acidDemoD"></div>
+        </div>
+      </div>
+      <div id="acidExplanation" style="margin-top:13px; min-height:40px;"></div>
+    </div>
+
+    <!-- Section 3: Dirty Read Demo -->
+    <div class="section">
+      <h2>3. Dirty Read Simulator</h2>
+      <div>
+        <button class="dirty-btn" onclick="dirtyStep(0)">Reset</button>
+        <button class="dirty-btn" onclick="dirtyStep(1)">T1 writes (uncommitted)</button>
+        <button class="dirty-btn" onclick="dirtyStep(2)">T2 reads (dirty read)</button>
+        <button class="dirty-btn" onclick="dirtyStep(3)">T1 aborts</button>
+      </div>
+      <div class="dirty-table-wrapper" id="dirtyTable"></div>
+      <div id="dirtyText" style="margin:12px 0; color:#3d3d3d; font-size:1.07em;"></div>
+    </div>
+
+    <!-- Section 4: GRANT and REVOKE Demo -->
+    <div class="section">
+      <h2>4. GRANT / REVOKE Privileges Demo</h2>
+      <div>
+        <button class="grant-btn" onclick="grantPrivilege('SELECT')">Grant SELECT to user2</button>
+        <button class="grant-btn" onclick="grantPrivilege('UPDATE')">Grant UPDATE to user2</button>
+        <button class="revoke-btn" onclick="revokePrivilege('SELECT')">Revoke SELECT from user2</button>
+        <button class="revoke-btn" onclick="revokePrivilege('UPDATE')">Revoke UPDATE from user2</button>
+      </div>
+      <table class="grant-table">
+        <tr>
+          <th>User</th><th>SELECT</th><th>UPDATE</th>
+        </tr>
+        <tr>
+          <td>user1 (owner)</td>
+          <td>Yes</td>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <td>user2</td>
+          <td id="selectCell">No</td>
+          <td id="updateCell">No</td>
+        </tr>
+      </table>
+      <div id="privText" style="margin:12px 0px 0px 2px; color:#594a00; font-size:1.08em;"></div>
+    </div>
+  </div>
+
+<script>
+  // --- Transaction States Logic ---
+  let currentState = 'active';
+  const stateMap = {
+    active: ["Transaction is being executed."],
+    partial: ["Transaction has finished its operations, awaiting commit."],
+    committed: ["Transaction changes are permanently saved in DB."],
+    failed: ["An error or failure occurred. No further actions possible."],
+    aborted: ["Transaction terminated; any changes rolled back."],
+  };
+  function setState(state) {
+    ["active","partial","committed","failed","aborted"].forEach(s => {
+      document.getElementById('state'+s.charAt(0).toUpperCase()+s.slice(1)).classList.remove('active','partial','committed','failed','aborted');
+      document.getElementById('state'+s.charAt(0).toUpperCase()+s.slice(1)).classList.add(s);
+    });
+    document.getElementById('state'+state.charAt(0).toUpperCase()+state.slice(1)).classList.add('active');
+    document.getElementById('stateExplanation').innerHTML = stateMap[state][0];
+    currentState = state;
+  }
+  function toState(target) {
+    if (target=="active") setState("active");
+    else if (target=="partial" && (currentState=="active")) setState("partial");
+    else if (target=="committed" && (currentState=="partial")) setState("committed");
+    else if (target=="failed" && (currentState=="active"||currentState=="partial")) setState("failed");
+    else if (target=="aborted" && (currentState=="failed")) setState("aborted");
+    else setState(currentState);
+  }
+  setState("active");
+
+  // --- ACID Properties Demo ---
+  const acidData = {
+    A: {
+      title: "Atomicity",
+      expl: "Atomicity ensures either all or none of a transaction's operations are performed. If any operation fails, entire transaction is rolled back.",
+      ex: "EXAMPLE: Transfer ₹100 from A→B. Debit from A is done but credit to B fails. Bank ensures A's debit is also undone (rolled back)."
+    },
+    C: {
+      title: "Consistency",
+      expl: "Consistency ensures database moves from one valid state to another. Transactions can't violate schema or constraints.",
+      ex: "EXAMPLE: Account A has ₹80, tries to withdraw ₹100. This violates constraint (no overdraft). Transaction is rejected."
+    },
+    I: {
+      title: "Isolation",
+      expl: "Isolation ensures concurrent transactions don't interfere. Intermediate/partial results are invisible to other transactions.",
+      ex: "EXAMPLE: T1 updates balance, T2 queries at same time. T2 sees original balance until T1 commits."
+    },
+    D: {
+      title: "Durability",
+      expl: "Durability ensures once committed, changes are permanent, even in case of power failure/crash.",
+      ex: "EXAMPLE: Bank deposit committed. System crashes after commit, but money is still deposited after recovery."
+    }
+  };
+  function showACID(code) {
+    ["A","C","I","D"].forEach(c=>{
+      document.getElementById('acid'+acidData[c].title).classList.remove('active');
+      document.getElementById('acidDemo'+c).innerText="";
+    });
+    document.getElementById('acid'+acidData[code].title).classList.add('active');
+    document.getElementById('acidDemo'+code).innerText = acidData[code].ex;
+    document.getElementById('acidExplanation').innerText = acidData[code].expl;
+  }
+
+  // --- Dirty Read demo logic ---
+  let dirtyState = 0;
+  const dirtyScenarios = [
+    {A:100, T1:"-", T2:"-", text:"Initial: Account A = 100. Both T1 and T2 inactive."},
+    {A:"<span style='color:#fdcb6e;font-weight:bold'>120*</span>", T1:"w(A=120)", T2:"-", text:"T1 writes A=120 but hasn't committed yet. * is uncommitted."},
+    {A:"<span style='color:#fdcb6e;font-weight:bold'>120*</span>", T1:"-", T2:"r(A=120)", text:"T2 reads new value A=120 (dirty read!). T1 still uncommitted."},
+    {A:100, T1:"-", T2:"-", text:"T1 aborts. Value of A is rolled back to 100. T2 has used wrong ('dirty') value!"}
+  ];
+  function renderDirty() {
+    const ds = dirtyScenarios[dirtyState];
+    document.getElementById('dirtyTable').innerHTML = `
+      <table>
+        <tr><th>Account A</th><th>T1</th><th>T2</th></tr>
+        <tr>
+          <td>${ds.A}</td>
+          <td>${ds.T1}</td>
+          <td>${ds.T2}</td>
+        </tr>
+      </table>
+    `;
+    document.getElementById('dirtyText').innerHTML = ds.text;
+  }
+  function dirtyStep(step) {
+    dirtyState = step;
+    renderDirty();
+  }
+  dirtyStep(0);
+
+  // --- GRANT REVOKE simulation ---
+  let privileges = {SELECT:false, UPDATE:false};
+  function updatePrivTable() {
+    document.getElementById('selectCell').innerText = privileges.SELECT ? "Yes" : "No";
+    document.getElementById('updateCell').innerText = privileges.UPDATE ? "Yes" : "No";
+  }
+  function grantPrivilege(priv) {
+    privileges[priv]=true;
+    updatePrivTable();
+    document.getElementById('privText').innerText = `GRANT ${priv} privilege to user2 executed.`;
+  }
+  function revokePrivilege(priv) {
+    privileges[priv]=false;
+    updatePrivTable();
+    document.getElementById('privText').innerText = `REVOKE ${priv} privilege from user2 executed.`;
+  }
+  updatePrivTable();
+</script>
+</body>
+</html>

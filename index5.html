@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Relational Algebra Visualizer</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #fafafa; color: #333; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    .section {
+      margin-bottom: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    label, select, input { font-size: 15px; margin: 5px 10px 5px 0; }
+    button {
+      font-size: 16px;
+      padding: 8px 16px;
+      cursor: pointer;
+      background-color: #2980b9;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin-top: 10px;
+      transition: background-color .3s;
+    }
+    button:hover { background-color: #3498db; }
+    table {
+      border-collapse: collapse; width: 100%; margin-top: 15px;
+    }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: center; }
+    th { background-color: #2980b9; color: white; }
+    .info { color: #777; margin-bottom: 10px; font-size: 1em; }
+    #tupleInputs label { margin-right: 16px;}
+    .opResult h4 { color: #2980b9; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Relational Algebra Visualizer</h1>
+  <div class="section">
+    <h3>Create Relation (Table)</h3>
+    <label for="relName">Relation Name:</label>
+    <input type="text" id="relName" placeholder="E.g., Students" />
+    <label for="relAttributes">Attributes (comma-separated):</label>
+    <input type="text" id="relAttributes" placeholder="E.g., ID,Name,Age" />
+    <button id="createRelBtn">Create Relation</button>
+    <div class="info">After creation, select the relation below to add data.</div>
+  </div>
+  <div class="section">
+    <h3>Relations</h3>
+    <select id="relationsList"><option value="">-- Select Relation --</option></select>
+    <button id="showRelationBtn">Show Relation Table</button>
+    <div id="relationTableContainer"></div>
+    <div id="addTupleSection" style="margin-top:14px; display:none;">
+      <div id="tupleInputs"></div>
+      <button id="addTupleBtn">Add Tuple</button>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Relational Algebra Operations</h3>
+    <label for="opSelect">Operation:</label>
+    <select id="opSelect">
+      <option value="select">Select (σ)</option>
+      <option value="project">Project (π)</option>
+      <option value="union">Union (∪)</option>
+      <option value="difference">Difference (−)</option>
+      <option value="join">Join (⋈)</option>
+    </select>
+    <div id="opArgsContainer" style="margin-top:15px;"></div>
+    <button id="applyOpBtn">Apply Operation</button>
+    <div id="resultContainer" class="opResult" style="margin-top: 20px;"></div>
+  </div>
+<script>
+const createRelBtn = document.getElementById("createRelBtn");
+const relNameInput = document.getElementById("relName");
+const relAttributesInput = document.getElementById("relAttributes");
+const relationsList = document.getElementById("relationsList");
+const showRelationBtn = document.getElementById("showRelationBtn");
+const relationTableContainer = document.getElementById("relationTableContainer");
+const addTupleSection = document.getElementById("addTupleSection");
+const tupleInputs = document.getElementById("tupleInputs");
+const addTupleBtn = document.getElementById("addTupleBtn");
+const opSelect = document.getElementById("opSelect");
+const opArgsContainer = document.getElementById("opArgsContainer");
+const applyOpBtn = document.getElementById("applyOpBtn");
+const resultContainer = document.getElementById("resultContainer");
+const relations = {};
+function renderTable(relation, tableTitle="") {
+  if (!relation) return '<p>No data to display.</p>';
+  const attrs = relation.attributes;
+  const rows = relation.tuples;
+  let html = tableTitle ? `<h4>${tableTitle}</h4>` : "";
+  html += "<table><thead><tr>";
+  attrs.forEach(attr => { html += `<th>${attr}</th>`; });
+  html += "</tr></thead><tbody>";
+  if (!rows || rows.length === 0) {
+    html += `<tr><td colspan="${attrs.length}">No tuples</td></tr>`;
+  } else {
+    rows.forEach(row => {
+      html += "<tr>";
+      attrs.forEach(attr => { html += `<td>${row[attr] !== undefined ? row[attr] : ""}</td>`; });
+      html += "</tr>";
+    });
+  }
+  html += "</tbody></table>";
+  return html;
+}
+createRelBtn.addEventListener("click", () => {
+  const relName = relNameInput.value.trim();
+  const attrsText = relAttributesInput.value.trim();
+  if (!relName || !attrsText) { alert("Please enter relation name and attributes."); return; }
+  if (relations[relName]) { alert("Relation with this name already exists."); return; }
+  const attrs = attrsText.split(",").map(a => a.trim()).filter(a => a.length > 0);
+  if (attrs.length === 0) { alert("Enter at least one attribute."); return; }
+  relations[relName] = { attributes: attrs, tuples: [] };
+  const option = document.createElement("option");
+  option.value = relName;
+  option.innerText = relName;
+  relationsList.appendChild(option);
+  relNameInput.value = "";
+  relAttributesInput.value = "";
+  alert(`Relation '${relName}' created with attributes: ${attrs.join(", ")}`);
+});
+showRelationBtn.addEventListener("click", () => {
+  const selectedRel = relationsList.value;
+  if (!selectedRel) { alert("Select a relation from the dropdown."); addTupleSection.style.display = "none"; return; }
+  const rel = relations[selectedRel];
+  relationTableContainer.innerHTML = renderTable(rel, selectedRel);
+});
+relationsList.addEventListener("change", () => {
+  const selectedRel = relationsList.value;
+  if (!selectedRel) { addTupleSection.style.display = "none"; relationTableContainer.innerHTML = ""; return; }
+  tupleInputs.innerHTML = "";
+  const attrs = relations[selectedRel].attributes;
+  attrs.forEach(attr => {
+    tupleInputs.innerHTML += `<label>${attr}: <input type="text" id="tuple_${attr}" /></label> `;
+  });
+  addTupleSection.style.display = "block";
+  relationTableContainer.innerHTML = renderTable(relations[selectedRel], selectedRel);
+});
+addTupleBtn.addEventListener("click", () => {
+  const selectedRel = relationsList.value;
+  if (!selectedRel) return;
+  const attrs = relations[selectedRel].attributes;
+  const newTuple = {}; let allFilled = true;
+  attrs.forEach(attr => {
+    const val = document.getElementById(`tuple_${attr}`).value.trim();
+    if (!val) allFilled = false;
+    newTuple[attr] = val;
+  });
+  if (!allFilled) { alert("Fill all attribute fields before adding tuple."); return; }
+  relations[selectedRel].tuples.push(newTuple);
+  relationTableContainer.innerHTML = renderTable(relations[selectedRel], selectedRel);
+  attrs.forEach(attr => { document.getElementById(`tuple_${attr}`).value = ""; });
+});
+function updateOperationUI() {
+  opArgsContainer.innerHTML = "";
+  let op = opSelect.value;
+  if (op === "select" || op === "project") {
+    opArgsContainer.innerHTML = `<label>Relation:
+      <select id="opRel1">
+        <option value="">-- Select --</option>
+        ${Object.keys(relations).map(r => `<option value="${r}">${r}</option>`).join('')}
+      </select></label>`;
+    if (op === "select") {
+      opArgsContainer.innerHTML += `<label>Condition (E.g., Age=21 or Name="Alice"):</label>
+        <input type="text" id="opCondition" placeholder="attribute=value" style="width:180px;" />`;
+    }
+    if (op === "project") {
+      opArgsContainer.innerHTML += `<label>Attributes (comma separated):</label>
+        <input type="text" id="opProjAttrs" placeholder="ID,Name" style="width:120px;" />`;
+    }
+  } else if (op === "union" || op === "difference" || op === "join") {
+    opArgsContainer.innerHTML = `<label>Relation 1:
+      <select id="opRel1">
+        <option value="">-- Select --</option>
+        ${Object.keys(relations).map(r => `<option value="${r}">${r}</option>`).join('')}
+      </select></label>
+      <label>Relation 2:
+      <select id="opRel2">
+        <option value="">-- Select --</option>
+        ${Object.keys(relations).map(r => `<option value="${r}">${r}</option>`).join('')}
+      </select></label>`;
+    if (op === "join") {
+      opArgsContainer.innerHTML += `<label>Join Attribute:</label>
+        <input type="text" id="opJoinAttr" placeholder="attribute" style="width:90px;" />`;
+    }
+  }
+}
+opSelect.addEventListener("change", updateOperationUI);
+updateOperationUI();
+applyOpBtn.addEventListener("click", () => {
+  const op = opSelect.value;
+  const rel1Name = document.getElementById("opRel1") ? document.getElementById("opRel1").value : null;
+  const rel2Name = document.getElementById("opRel2") ? document.getElementById("opRel2").value : null;
+  let resultRel = null;
+  let info = "";
+  if (op === "select") {
+    if (!rel1Name) return alert("Select a relation.");
+    const cond = document.getElementById("opCondition").value.trim();
+    resultRel = selectOp(relations[rel1Name], cond);
+    info = `Result of σ [${cond}] (${rel1Name})`;
+  }
+  else if (op === "project") {
+    if (!rel1Name) return alert("Select a relation.");
+    const projAttrs = document.getElementById("opProjAttrs").value.trim();
+    if (!projAttrs) return alert("Specify attributes to project.");
+    resultRel = projectOp(relations[rel1Name], projAttrs.split(",").map(s => s.trim()).filter(Boolean));
+    info = `Result of π [${projAttrs}] (${rel1Name})`;
+  }
+  else if (op === "union") {
+    if (!rel1Name || !rel2Name) return alert("Select both relations for union.");
+    resultRel = unionOp(relations[rel1Name], relations[rel2Name]);
+    info = `Result of (${rel1Name}) ∪ (${rel2Name})`;
+  }
+  else if (op === "difference") {
+    if (!rel1Name || !rel2Name) return alert("Select both relations for difference.");
+    resultRel = differenceOp(relations[rel1Name], relations[rel2Name]);
+    info = `Result of (${rel1Name}) − (${rel2Name})`;
+  }
+  else if (op === "join") {
+    if (!rel1Name || !rel2Name) return alert("Select both relations for join.");
+    const joinAttr = document.getElementById("opJoinAttr").value.trim();
+    if (!joinAttr) return alert("Specify join attribute.");
+    resultRel = joinOp(relations[rel1Name], relations[rel2Name], joinAttr);
+    info = `Result of (${rel1Name}) ⋈ (${rel2Name}) on ${joinAttr}`;
+  }
+  resultContainer.innerHTML = renderTable(resultRel, info);
+});
+function selectOp(relation, cond) {
+  let [attr, value] = cond.split("=");
+  if (!attr || value === undefined) return {attributes: relation.attributes, tuples: []};
+  attr = attr.trim();
+  value = value.trim();
+  if ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.substring(1, value.length-1);
+  }
+  let tuples = relation.tuples.filter(tuple => (tuple[attr] === value));
+  return {attributes: relation.attributes, tuples};
+}
+function projectOp(relation, attrs) {
+  attrs = attrs && attrs.length ? attrs : relation.attributes;
+  attrs = attrs.filter(attr => relation.attributes.includes(attr));
+  let tuples = relation.tuples.map(row => {
+    let newRow = {};
+    attrs.forEach(a => { newRow[a] = row[a]; });
+    return newRow;
+  });
+  let uniqueTuples = [];
+  let seen = new Set();
+  tuples.forEach(t => {
+    let key = attrs.map(a => t[a]).join("|");
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueTuples.push(t);
+    }
+  });
+  return {attributes: attrs, tuples: uniqueTuples};
+}
+function unionOp(rel1, rel2) {
+  if (rel1.attributes.length !== rel2.attributes.length ||
+      !rel1.attributes.every((v,i) => v === rel2.attributes[i])) {
+    alert("Union is only possible for relations with identical attributes.");
+    return {attributes: rel1.attributes, tuples: []};
+  }
+  let all = rel1.tuples.concat(rel2.tuples);
+  let unique = [];
+  let seen = new Set();
+  all.forEach(t => {
+    let key = rel1.attributes.map(a => t[a]).join("|");
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(t);
+    }
+  });
+  return {attributes: rel1.attributes, tuples: unique};
+}
+function differenceOp(rel1, rel2) {
+  if (rel1.attributes.length !== rel2.attributes.length ||
+      !rel1.attributes.every((v,i) => v === rel2.attributes[i])) {
+    alert("Difference is only possible for relations with identical attributes.");
+    return {attributes: rel1.attributes, tuples: []};
+  }
+  let set2 = new Set(rel2.tuples.map(t => rel2.attributes.map(a => t[a]).join("|")));
+  let tuples = rel1.tuples.filter(t => !set2.has(rel1.attributes.map(a => t[a]).join("|")));
+  return {attributes: rel1.attributes, tuples};
+}
+function joinOp(rel1, rel2, attr) {
+  if (!rel1.attributes.includes(attr) || !rel2.attributes.includes(attr)) {
+    alert("Both relations must contain the join attribute.");
+    return {attributes: rel1.attributes.concat(rel2.attributes.filter(a=>a!==attr)), tuples: []};
+  }
+  let attrs = rel1.attributes.concat(rel2.attributes.filter(a=>a!==attr));
+  let tuples = [];
+  rel1.tuples.forEach(t1 => {
+    rel2.tuples.forEach(t2 => {
+      if (t1[attr] === t2[attr]) {
+        let joined = {};
+        rel1.attributes.forEach(a => { joined[a] = t1[a]; });
+        rel2.attributes.forEach(a => { if (a !== attr) joined[a] = t2[a]; });
+        tuples.push(joined);
+      }
+    });
+  });
+  return {attributes: attrs, tuples};
+}
+</script>
+</body>
+</html>

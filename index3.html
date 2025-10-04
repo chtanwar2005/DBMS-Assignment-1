@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ER/EER Diagram Builder</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f7f8;
+      padding: 20px;
+      color: #34495e;
+      user-select: none;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-weight: 700;
+    }
+    #controls {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    button {
+      background-color: #2980b9;
+      border: none;
+      padding: 12px 18px;
+      margin-right: 12px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #3498db;
+    }
+    #canvas {
+      border: 2px solid #bdc3c7;
+      background-color: #ffffff;
+      display: block;
+      margin: 0 auto;
+      cursor: grab;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgb(0 0 0 / 0.1);
+    }
+    #schemaOutput {
+      max-width: 900px;
+      background: #ecf0f1;
+      border-radius: 8px;
+      padding: 15px 20px;
+      margin: 30px auto;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 15px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      box-shadow: inset 0 0 10px #d1d8e0;
+      color: #2c3e50;
+      user-select: text;
+    }
+    /* Entity box */
+    .entity {
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <h1>ER/EER Diagram Builder</h1>
+
+  <div id="controls">
+    <button id="addEntityBtn">Add Entity</button>
+    <button id="addAttributeBtn">Add Attribute to Selected</button>
+    <button id="addRelationshipBtn">Draw Relationship</button>
+    <button id="generateSchemaBtn">Generate Relational Schema</button>
+  </div>
+
+  <canvas id="canvas" width="900" height="600"></canvas>
+
+  <div id="schemaOutput" tabindex="0" aria-label="Relational schema output"></div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let entities = [];
+    let selectedEntityIndex = -1;
+    let draggingIndex = -1;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    let relationships = [];
+    let drawingRelationship = false;
+    let relStartEntity = -1;
+    let relEndEntity = -1;
+
+    let attributeCounter = 1;
+
+    function drawEntities() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fdfdfd";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.font = "16px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+
+      // Draw relationships
+      ctx.strokeStyle = "#7f8c8d";
+      ctx.lineWidth = 2;
+      relationships.forEach(rel => {
+        const start = entities[rel.from];
+        const end = entities[rel.to];
+        if (!start || !end) return;
+
+        const startX = start.x + start.width/2;
+        const startY = start.y + start.height/2;
+        const endX = end.x + end.width/2;
+        const endY = end.y + end.height/2;
+
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+
+        ctx.fillStyle = "#2c3e50";
+        ctx.font = "bold 14px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        if (rel.cardinalityFrom) {
+          ctx.fillText(rel.cardinalityFrom, startX + (endX - startX)*0.3, startY + (endY - startY)*0.3 - 12);
+        }
+        if (rel.cardinalityTo) {
+          ctx.fillText(rel.cardinalityTo, startX + (endX - startX)*0.7, startY + (endY - startY)*0.7 - 12);
+        }
+      });
+
+      entities.forEach((entity, i) => {
+        // Draw entity box with shadow and rounded corners
+        ctx.fillStyle = (selectedEntityIndex === i) ? "#50b882" : "#74b9ff";
+        const radius = 12;
+
+        // Draw rounded rectangle function
+        roundRect(ctx, entity.x, entity.y, entity.width, entity.height, radius, true, true);
+
+        // Draw text
+        ctx.fillStyle = "#2c3e50";
+        ctx.font = "bold 18px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        ctx.fillText(entity.name, entity.x + entity.width / 2, entity.y + entity.height / 5);
+
+        // Draw attributes below with bullet points
+        ctx.font = "15px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        ctx.fillStyle = "#34495e";
+        entity.attributes.forEach((attr, idx) => {
+          const attrX = entity.x + 15;
+          const attrY = entity.y + entity.height / 3 + idx * 22;
+          ctx.fillText("• " + attr, attrX + 40, attrY);
+        });
+      });
+    }
+
+    // Rounded rectangle function from MDN
+    function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+      if (typeof stroke === 'undefined') {
+        stroke = true;
+      }
+      if (typeof radius === 'undefined') {
+        radius = 5;
+      }
+      if (typeof radius === 'number') {
+        radius = {tl: radius, tr: radius, br: radius, bl: radius};
+      } else {
+        var defaultRadius = {tl: 0, tr: 0, br: 0, bl: 0};
+        for (var side in defaultRadius) {
+          radius[side] = radius[side] || defaultRadius[side];
+        }
+      }
+      ctx.beginPath();
+      ctx.moveTo(x + radius.tl, y);
+      ctx.lineTo(x + width - radius.tr, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+      ctx.lineTo(x + width, y + height - radius.br);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+      ctx.lineTo(x + radius.bl, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+      ctx.lineTo(x, y + radius.tl);
+      ctx.quadraticCurveTo(x, y, x + radius.tl, y);
+      ctx.closePath();
+      if (fill) {
+        ctx.fill();
+      }
+      if (stroke) {
+        ctx.stroke();
+      }
+    }
+
+    // Event Handling
+
+    document.getElementById('addEntityBtn').addEventListener('click', () => {
+      entities.push({
+        name: "Entity" + (entities.length + 1),
+        x: 60 + entities.length * 150,
+        y: 80,
+        width: 160,
+        height: 60,
+        attributes: []
+      });
+      drawEntities();
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      draggingIndex = -1;
+      selectedEntityIndex = -1;
+
+      for (let i = entities.length - 1; i >= 0; i--) {
+        const entity = entities[i];
+        if (mouseX >= entity.x && mouseX <= entity.x + entity.width &&
+            mouseY >= entity.y && mouseY <= entity.y + entity.height) {
+          selectedEntityIndex = i;
+          draggingIndex = i;
+          dragOffsetX = mouseX - entity.x;
+          dragOffsetY = mouseY - entity.y;
+          canvas.style.cursor = 'grabbing';
+          break;
+        }
+      }
+
+      if (drawingRelationship) {
+        if (selectedEntityIndex >= 0) {
+          if (relStartEntity === -1) {
+            relStartEntity = selectedEntityIndex;
+            alert("Selected start entity: " + entities[relStartEntity].name + ". Now click end entity.");
+          } else if (relEndEntity === -1 && selectedEntityIndex !== relStartEntity) {
+            relEndEntity = selectedEntityIndex;
+            const fromCard = prompt("Cardinality for start entity", "1");
+            const toCard = prompt("Cardinality for end entity", "N");
+            relationships.push({
+              from: relStartEntity,
+              to: relEndEntity,
+              cardinalityFrom: fromCard,
+              cardinalityTo: toCard
+            });
+            drawingRelationship = false;
+            relStartEntity = -1;
+            relEndEntity = -1;
+            drawEntities();
+          }
+        }
+      } else {
+        drawEntities();
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (draggingIndex >= 0) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const entity = entities[draggingIndex];
+        entity.x = mouseX - dragOffsetX;
+        entity.y = mouseY - dragOffsetY;
+        drawEntities();
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      draggingIndex = -1;
+      canvas.style.cursor = 'grab';
+    });
+
+    document.getElementById('addAttributeBtn').addEventListener('click', () => {
+      if (selectedEntityIndex === -1) {
+        alert("Select an entity first by clicking on it.");
+        return;
+      }
+      const attrName = prompt("Enter attribute name", "Attribute" + attributeCounter++);
+      if (attrName) {
+        entities[selectedEntityIndex].attributes.push(attrName);
+        drawEntities();
+      }
+    });
+
+    document.getElementById('addRelationshipBtn').addEventListener('click', () => {
+      if (entities.length < 2) {
+        alert("Add at least two entities for relationships.");
+        return;
+      }
+      drawingRelationship = true;
+      relStartEntity = -1;
+      relEndEntity = -1;
+      alert("Click on start entity, then on end entity to create relationship.");
+    });
+
+    document.getElementById('generateSchemaBtn').addEventListener('click', () => {
+      let output = "";
+
+      entities.forEach(entity => {
+        output += `Table: ${entity.name}\nAttributes: ${entity.attributes.join(", ")}\nPrimary Key: ${entity.attributes.length > 0 ? entity.attributes[0] : "(define)"}\n\n`;
+      });
+
+      output += "--- Relationships (Foreign Keys) ---\n";
+
+      relationships.forEach(rel => {
+        const fromEntity = entities[rel.from];
+        const toEntity = entities[rel.to];
+        output += `${fromEntity.name} → ${toEntity.name} (cardinalities: ${rel.cardinalityFrom} : ${rel.cardinalityTo})\n`;
+      });
+
+      document.getElementById('schemaOutput').innerText = output;
+    });
+
+    // Initial draw
+    drawEntities();
+  </script>
+</body>
+</html>
